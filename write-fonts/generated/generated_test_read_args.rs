@@ -26,6 +26,7 @@ impl FontWrite for BaseArray {
     }
 }
 
+#[cfg(feature = "tables")]
 impl Validate for BaseArray {
     fn validate_impl(&self, ctx: &mut ValidationCtx) {
         ctx.in_table("BaseArray", |ctx| {
@@ -85,6 +86,7 @@ impl FontWrite for BaseRecord {
     }
 }
 
+#[cfg(feature = "tables")]
 impl Validate for BaseRecord {
     fn validate_impl(&self, ctx: &mut ValidationCtx) {
         ctx.in_table("BaseRecord", |ctx| {
@@ -124,6 +126,7 @@ impl FontWrite for FaceRecord {
     }
 }
 
+#[cfg(feature = "tables")]
 impl Validate for FaceRecord {
     fn validate_impl(&self, ctx: &mut ValidationCtx) {
         ctx.in_table("FaceRecord", |ctx| {
@@ -163,6 +166,7 @@ impl FontWrite for Face {
     }
 }
 
+#[cfg(feature = "tables")]
 impl Validate for Face {
     fn validate_impl(&self, _ctx: &mut ValidationCtx) {}
 }
