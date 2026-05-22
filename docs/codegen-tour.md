@@ -809,15 +809,16 @@ that is malformed.
 
 We do not want to *write* tables that are malformed, however, and we also want
 an opportunity to enforce various other constraints that are expressed in the
-spec, and for this we have the [`Validate`][] trait. An implementation of this
-trait is generated for all tables, and we automatically verify a number of
-conditions: for instance that offsets which should not be null contain a value,
-or that the number of items in a table does not overflow the integer type that
-stores that table's length. Additional validation can be performed on a
-per-field basis by providing a method name to the `#[validate(..)]` attribute;
-this should be an instance method (having a `&self` param) and should also
-accept an additional 'ctx' argument, of type [`&mut ValidateCtx`][validation-ctx] which is used
-to report errors.
+spec, and for this we have the [`Validate`][] trait (available when the `tables`
+feature is enabled). An implementation of this trait is generated for all
+tables, and we automatically verify a number of conditions: for instance that
+offsets which should not be null contain a value, or that the number of items in
+a table does not overflow the integer type that stores that table's
+length. Additional validation can be performed on a per-field basis by providing
+a method name to the `#[validate(..)]` attribute; this should be an instance
+method (having a `&self` param) and should also accept an additional 'ctx'
+argument, of type [`&mut ValidateCtx`][validation-ctx] which is used to report
+errors.
 
 ### <a id="compilation"></a> compilation and [`FontWrite`][]
 
@@ -890,4 +891,3 @@ clarify.
 [`VarLenArray`]: https://docs.rs/read-fonts/latest/read_fonts/array/struct.VarLenArray.html
 [`VarSize`]: https://docs.rs/read-fonts/latest/read_fonts/trait.VarSize.html
 [pstring]: https://learn.microsoft.com/en-us/typography/opentype/spec/post#version-20
-

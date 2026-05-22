@@ -1,12 +1,7 @@
 use std::collections::BTreeSet;
 
-use crate::error::{Error, PackingError};
-use crate::graph::Graph;
 use crate::objects::{ObjectId, ObjectStore, OffsetLen};
 use crate::table_type::TableType;
-use crate::validate::Validate;
-use font_types::{FixedSize, Scalar};
-use read_fonts::{FontData, FontRead, FontReadWithArgs, ReadError};
 
 /// A type that that can be written out as part of a font file.
 ///
@@ -50,7 +45,11 @@ pub struct TableWriter {
 ///
 /// Returns an error if the table is malformed or cannot otherwise be serialized,
 /// otherwise it will return the bytes encoding the table.
-pub fn dump_table<T: FontWrite + Validate>(table: &T) -> Result<Vec<u8>, Error> {
+#[cfg(feature = "tables")]
+pub fn dump_table<T: FontWrite + crate::validate::Validate>(
+    table: &T,
+) -> Result<Vec<u8>, crate::error::Error> {
+    use crate::error::{Error, PackingError};
     log::trace!("writing table '{}'", table.table_type());
     table.validate()?;
     let mut graph = TableWriter::make_graph(table);
@@ -64,26 +63,12 @@ pub fn dump_table<T: FontWrite + Validate>(table: &T) -> Result<Vec<u8>, Error> 
 }
 
 impl TableWriter {
-    /// A convenience method for generating a graph with the provided root object.
-    pub(crate) fn make_graph(root: &impl FontWrite) -> Graph {
-        let mut writer = TableWriter::default();
-        let root_id = writer.add_table(root);
-        Graph::from_obj_store(writer.tables, root_id)
-    }
-
     fn add_table(&mut self, table: &dyn FontWrite) -> ObjectId {
         self.stack.push(TableData::default());
         table.write_into(self);
         let mut table_data = self.stack.pop().unwrap();
         table_data.type_ = table.table_type();
         self.tables.add(table_data)
-    }
-
-    /// Call the provided closure, adjusting any written offsets by `adjustment`.
-    pub(crate) fn adjust_offsets(&mut self, adjustment: u32, f: impl FnOnce(&mut TableWriter)) {
-        self.offset_adjustment = adjustment;
-        f(self);
-        self.offset_adjustment = 0;
     }
 
     /// Write raw bytes into this table.
@@ -110,6 +95,31 @@ impl TableWriter {
         data.add_offset(obj_id, width, self.offset_adjustment);
     }
 
+    /// used when writing top-level font objects, which are done more manually.
+    pub(crate) fn into_data(mut self) -> TableData {
+        assert_eq!(self.stack.len(), 1);
+        let result = self.stack.pop().unwrap();
+        assert!(result.offsets.is_empty());
+        result
+    }
+}
+
+#[cfg(feature = "tables")]
+impl TableWriter {
+    /// A convenience method for generating a graph with the provided root object.
+    pub(crate) fn make_graph(root: &impl FontWrite) -> crate::graph::Graph {
+        let mut writer = TableWriter::default();
+        let root_id = writer.add_table(root);
+        crate::graph::Graph::from_obj_store(writer.tables, root_id)
+    }
+
+    /// Call the provided closure, adjusting any written offsets by `adjustment`.
+    pub(crate) fn adjust_offsets(&mut self, adjustment: u32, f: impl FnOnce(&mut TableWriter)) {
+        self.offset_adjustment = adjustment;
+        f(self);
+        self.offset_adjustment = 0;
+    }
+
     /// Add a padding byte of necessary to ensure the table length is an even number.
     ///
     /// This is necessary for things like the glyph table, which require offsets
@@ -118,14 +128,6 @@ impl TableWriter {
         if self.stack.last().unwrap().bytes.len() % 2 != 0 {
             self.write_slice(&[0]);
         }
-    }
-
-    /// used when writing top-level font objects, which are done more manually.
-    pub(crate) fn into_data(mut self) -> TableData {
-        assert_eq!(self.stack.len(), 1);
-        let result = self.stack.pop().unwrap();
-        assert!(result.offsets.is_empty());
-        result
     }
 
     /// A reference to the current table data.
@@ -188,11 +190,8 @@ pub(crate) struct OffsetRecord {
 }
 
 impl TableData {
-    pub(crate) fn new(type_: TableType) -> Self {
-        TableData {
-            type_,
-            ..Default::default()
-        }
+    fn write_bytes(&mut self, bytes: &[u8]) {
+        self.bytes.extend_from_slice(bytes)
     }
 
     /// the 'adjustment' param is used to modify the written position.
@@ -215,8 +214,18 @@ impl TableData {
         let placeholder = PLACEHOLDER_BYTES.get(..width.min(4)).unwrap();
         self.write_bytes(placeholder);
     }
+}
 
-    pub(crate) fn write<T: Scalar>(&mut self, value: T) {
+#[cfg(feature = "tables")]
+impl TableData {
+    pub(crate) fn new(type_: TableType) -> Self {
+        TableData {
+            type_,
+            ..Default::default()
+        }
+    }
+
+    pub(crate) fn write<T: font_types::Scalar>(&mut self, value: T) {
         self.write_bytes(value.to_raw().as_ref())
     }
 
@@ -224,36 +233,37 @@ impl TableData {
     ///
     /// Only used in very special cases. The caller is responsible for knowing
     /// what they are doing.
-    pub(crate) fn write_over<T: Scalar>(&mut self, value: T, pos: usize) {
+    pub(crate) fn write_over<T: font_types::Scalar>(&mut self, value: T, pos: usize) {
         let raw = value.to_raw();
         let len = raw.as_ref().len();
         self.bytes[pos..pos + len].copy_from_slice(raw.as_ref());
-    }
-
-    fn write_bytes(&mut self, bytes: &[u8]) {
-        self.bytes.extend_from_slice(bytes)
     }
 
     /// A helper function to reparse this table data as some type.
     ///
     /// Used internally when modifying the graph after initial compilation,
     /// such as during table splitting.
-    pub(crate) fn reparse<'a, T: FontRead<'a>>(&'a self) -> Result<T, ReadError> {
-        let data = FontData::new(&self.bytes);
+    pub(crate) fn reparse<'a, T: read_fonts::FontRead<'a>>(
+        &'a self,
+    ) -> Result<T, read_fonts::ReadError> {
+        let data = read_fonts::FontData::new(&self.bytes);
         T::read(data)
     }
 
     // see above
-    pub(crate) fn reparse_with_args<'a, A, T: FontReadWithArgs<'a, Args = A>>(
+    pub(crate) fn reparse_with_args<'a, A, T: read_fonts::FontReadWithArgs<'a, Args = A>>(
         &'a self,
         args: &A,
-    ) -> Result<T, ReadError> {
-        let data = FontData::new(&self.bytes);
+    ) -> Result<T, read_fonts::ReadError> {
+        let data = read_fonts::FontData::new(&self.bytes);
         T::read_with_args(data, args)
     }
 
     /// A helper function to read a value out of this data.
-    pub(crate) fn read_at<T: Scalar>(&self, pos: usize) -> Option<T> {
+    pub(crate) fn read_at<T: font_types::FixedSize + font_types::Scalar>(
+        &self,
+        pos: usize,
+    ) -> Option<T> {
         let len = T::RAW_BYTE_LEN;
         self.bytes.get(pos..pos + len).and_then(T::read)
     }

@@ -22,11 +22,12 @@ Currently, this repo contains four main library crates: [`font-types`][], [`read
 - [`read-fonts`][] contains code for parsing and accessing font files. It is
   intended to be a high performance parser, suitable for shaping. In particular
   this means that it performs no allocation and no copying.
-- [`write-fonts`][] contains code for modifying and writing font data. It contains
-  owned types representing the various tables and records in the specification,
-  as well as code for compiling these and writing out font files. It has an
-  optional dependency on `read-fonts`, in which case it can also parse font
-  data, which can then be modified and written back out to disk.
+- [`write-fonts`][] contains code for modifying and writing font data. It
+  contains owned types representing the various tables and records in the
+  specification, as well as code for compiling these and writing out font files
+  with the default `tables` feature. Without the tables feature, you may still
+  write binary table data.  It has a dependency on `read-fonts`, which it uses
+  to parse font data, which can then be modified and written back out to disk.
 - [`skrifa`][] is a mid level library that provides access to various types of
   metadata contained in a font as well as support for loading glyph outlines.
     - It's primary purpose is to replace FreeType in Google applications.
@@ -72,7 +73,7 @@ graph LR
     skrifa --> read-fonts
     write-fonts --> font-types
     write-fonts --> read-fonts
-    write-fonts --> kurbo
+    write-fonts -.->|tables| kurbo
     norad --> kurbo
 ```
 
@@ -93,7 +94,7 @@ overview of how to use the `font-codegen` crate, see the readme at
    * [build.sh](https://github.com/google/oss-fuzz/blob/master/projects/fontations/build.sh) looks for `target/x86_64-unknown-linux-gnu/release/fuzz_*`
    * ^ is meant to mean we can add additional fuzzers to fontations without having to touch oss-fuzz every time
    * `build.sh` also controls the test corpus, look for the `git clone` lines
- 
+
 To reproduce a fuzzer issue:
 
 1. Download the file from the testcase, e.g. https://oss-fuzz.com/testcase-detail/6213391169945600
