@@ -109,6 +109,9 @@ jobs:
         run: |
           pip install -r resources/scripts/skera_ci_requirements.txt
           cargo test -p skera --all-targets --all-features
+          # This is no longer needed if we fix the slow integration tests.
+          # https://github.com/googlefonts/fontations/issues/1910
+          cargo test -p skera --all-targets --all-features -- --ignored
 
       - name: cargo test skera (no cli)
         run: cargo test -p skera --no-default-features

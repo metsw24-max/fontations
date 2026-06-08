@@ -674,6 +674,8 @@ fn compare_with_expected(output_dir: &Path, output_file: &Path, expected_file: &
     }
 }
 
+const SLOW_TEST: &str = "tests/layout.notonastaliqurdu.tests";
+
 #[test]
 fn run_all_tests() {
     use std::ffi::OsStr;
@@ -681,6 +683,9 @@ fn run_all_tests() {
     for entry in tests_path.read_dir().expect("can't read dir: test-data") {
         let entry = entry.unwrap();
         let path = entry.path();
+        if path.extension() != Some(OsStr::new("tests")) || path.ends_with(SLOW_TEST) {
+            continue;
+        }
         if path.extension() == Some(OsStr::new("tests")) {
             let test = SubsetTestCase::new(&path);
             match std::env::var(GEN_EXPECTED_OUTPUTS_VAR) {
@@ -690,6 +695,25 @@ fn run_all_tests() {
                 Err(_e) => {
                     test.run();
                 }
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = r#"Slow integration test, see https://github.com/googlefonts/fontations/issues/1910.
+To run manually: cargo test -p skera -- --ignored"#]
+fn run_slow_test() {
+    use std::ffi::OsStr;
+    let path = Path::new(TEST_DATA_DIR).join(SLOW_TEST);
+    if path.extension() == Some(OsStr::new("tests")) {
+        let test = SubsetTestCase::new(&path);
+        match std::env::var(GEN_EXPECTED_OUTPUTS_VAR) {
+            Ok(_val) => {
+                test.gen_expected_output();
+            }
+            Err(_e) => {
+                test.run();
             }
         }
     }
