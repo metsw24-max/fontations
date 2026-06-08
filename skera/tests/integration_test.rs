@@ -6,6 +6,7 @@
 //! To generate the expected output files, pass GEN_EXPECTED_OUTPUTS=1 as an
 //! environment variable.
 
+use rayon::prelude::*;
 use skera::{
     parse_unicodes, subset_font, Plan, SubsetFlags, DEFAULT_DROP_TABLES, DEFAULT_LAYOUT_FEATURES,
 };
@@ -312,14 +313,14 @@ impl SubsetTestCase {
     fn run(&self) {
         let output_temp_dir = TempDir::new_in(".", "skera_test").unwrap();
         let output_dir = output_temp_dir.path();
-        for font in &self.fonts {
-            for profile in &self.profiles {
-                for subset in &self.subsets {
+        self.fonts.par_iter().for_each(|font| {
+            self.profiles.par_iter().for_each(|profile| {
+                self.subsets.par_iter().for_each(|subset| {
                     //TODO: add support for instances/iup_options
                     self.run_one_test(font, subset, profile, output_dir);
-                }
-            }
-        }
+                })
+            })
+        })
     }
 
     fn gen_expected_output(&self) {
@@ -678,8 +679,11 @@ fn compare_with_expected(output_dir: &Path, output_file: &Path, expected_file: &
 fn run_all_tests() {
     use std::ffi::OsStr;
     let tests_path = Path::new(TEST_DATA_DIR).join("tests");
-    for entry in tests_path.read_dir().expect("can't read dir: test-data") {
-        let entry = entry.unwrap();
+    let entries: Result<Vec<_>, _> = tests_path
+        .read_dir()
+        .expect("can't read dir: test-data")
+        .collect();
+    entries.unwrap().par_iter().for_each(|entry| {
         let path = entry.path();
         if path.extension() == Some(OsStr::new("tests")) {
             let test = SubsetTestCase::new(&path);
@@ -692,7 +696,7 @@ fn run_all_tests() {
                 }
             }
         }
-    }
+    });
 }
 
 #[test]
