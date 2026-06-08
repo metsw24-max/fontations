@@ -205,6 +205,16 @@ jobs:
           echo "::error::Fix "check typos" or add an entry in .typos.toml"
           exit 1
 
+  check-package-size:
+    name: check package sizes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: check package sizes
+        run: resources/scripts/check_package_sizes.sh
+
   fauntlet:
     name: fauntlet
     runs-on: ubuntu-latest
